@@ -24,5 +24,9 @@ ftp_socket.send(ftp_message)
 ftp_reply = ftp_socket.recv(max_line)
 sys.stdout.write(ftp_reply)
 
-if ftp_reply == 0:
+if ftp_reply[1:3] == 331:
     sys.stdout.write('>>> ')
+    ftp_message = 'PASS ' + ftp_user + break_line
+    ftp_socket.send(ftp_message)
+    ftp_reply = ftp_socket.recv(max_line)
+    sys.stdout.write(ftp_reply)
