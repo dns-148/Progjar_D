@@ -76,14 +76,54 @@ def data_connection():
 def working_directory():
     ftp_command = 'PWD' + break_line
     ftp_socket.send(ftp_command)
-    return ftp_socket.recv(max_line)
+    ftp_response = ftp_socket.recv(max_line)
+    sys.stdout.write(ftp_response)
+    return
+
+
+# Make directory
+def make_directory(command):
+    ftp_command = command + break_line
+    ftp_socket.send(ftp_command)
+    ftp_response = ftp_socket.recv(max_line)
+    sys.stdout.write(ftp_response)
+    return
+
+
+# Rename file or directory
+def rename(command):
+    ftp_command = command + break_line
+    ftp_socket.send(ftp_command)
+    ftp_response = ftp_socket.recv(max_line)
+    sys.stdout.write(ftp_response)
+    if ftp_response != '3':
+        return
+    else:
+        sys.stdout.write('>>> ')
+        ftp_command = sys.stdin.readline()
+        ftp_command = ftp_command + break_line
+        ftp_socket.send(ftp_command)
+        ftp_response = ftp_socket.recv(max_line)
+        sys.stdout.write(ftp_response)
+        return
+
+
+# Remove directory
+def remove_directory(command):
+    ftp_command = command + break_line
+    ftp_socket.send(ftp_command)
+    ftp_response = ftp_socket.recv(max_line)
+    sys.stdout.write(ftp_response)
+    return
 
 
 # Display the list of files and no other information
-def nlst_function():
-    ftp_command = 'TYPE A' + break_line
+def listing_directory(command):
+    ftp_command = command + break_line
     ftp_socket.send(ftp_command)
-# self.retrlines(cmd, func)
+    ftp_response = ftp_data_socket.recv(max_line)
+    ftp_response = str(ftp_response).replace('\012\015', '\n')
+    sys.stdout.write(ftp_response)
 
 
 # create connection
@@ -97,6 +137,42 @@ def create_connection():
     sys.stdout.write(ftp_welcome)
     return family, ftp_new_socket
 
+
+# Enter passive mode
+def enter_pasv():
+    ftp_command = 'PASV' + break_line
+    ftp_socket.send(ftp_command)
+    ftp_response = ftp_socket.recv(max_line)
+    error_flag = ''
+
+    if ftp_response != '227':
+        error_flag = 'Error'
+    left = ftp_response.find('(')
+
+    if left < 0:
+        error_flag = 'Error'
+    right = ftp_response.find(')', left + 1)
+
+    if right < 0:
+        error_flag = 'Error'
+
+    if ftp_response[left + 1] != ftp_response[right - 1]:
+        error_flag = 'Error'
+
+    parts = ftp_response[left + 1:right].split(ftp_response[left + 1])
+
+    if error_flag != 'Error':
+        sys.stdout.write('227 Entering Passive Mode')
+
+        import re
+        regex = re.compile(r'(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)')
+
+        host = ftp_socket.getpeername()[0]
+        port = int(parts[3])
+        return host, port
+    else:
+        sys.stdout.write(ftp_response)
+        return error_flag, 0
 
 # Enter extended passive mode
 def enter_epsv():
@@ -149,12 +225,11 @@ try:
     while ftp_reply[0:3] == '530':
         ftp_reply = login_ftp()
 
-    sys.stdout.write('>>> ')
-
     while True:
+        sys.stdout.write('>>> ')
         command_input = sys.stdin.readline()
         if command_input == 'PWD':
-            ftp_reply = working_directory()
+            working_directory()
         elif command_input == 'QUIT':
             ftp_reply = quit_ftp_server()
             ftp_data_socket.close()
@@ -164,6 +239,8 @@ try:
             if ftp_socket == 'exit':
                 sys.exit(0)
             ftp_reply = login_ftp()
+            while ftp_reply[0:3] == '530':
+                ftp_reply = login_ftp()
         elif command_input == 'EPSV':
             ftp_data_host, ftp_data_port = enter_epsv()
             if ftp_data_host == 'Error':
@@ -171,10 +248,17 @@ try:
                 passive_mode = False
             else:
                 passive_mode = True
-        elif command_input[:4] == 'NLST':
-            ftp_data_socket,size = data_connection()
+        elif command_input[:4] == 'NLST' or command_input[:4] == 'LIST':
+            ftp_data_socket, size = data_connection()
+            listing_directory(command_input)
+            ftp_data_socket.close()
+            ftp_data_socket = None
+        elif command_input[:3] == 'MKD':
+            make_directory(command_input)
+        elif command_input[:3] == 'RMD':
+            remove_directory(command_input)
+        elif command_input[:4] == 'RNFR':
+            rename(command_input)
 
-
-
-except:
+except KeyboardInterrupt:
     sys.exit(0)
