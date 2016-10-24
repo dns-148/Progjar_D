@@ -12,6 +12,7 @@ ftp_socket = None
 
 # login to ftp server
 def login_ftp():
+    sys.stdout.write('Username:\n')
     sys.stdout.write('>>> ')
     ftp_input = sys.stdin.readline()
 
@@ -20,6 +21,7 @@ def login_ftp():
     ftp_login_reply = ftp_socket.recv(max_line)
     sys.stdout.write(ftp_login_reply)
 
+    sys.stdout.write('Password:\n')
     sys.stdout.write('>>> ')
     ftp_input = sys.stdin.readline()
     ftp_message = 'PASS ' + ftp_input + break_line
@@ -30,14 +32,15 @@ def login_ftp():
 
 
 # Displays the current working directory
-def print_working_directory():
-    ftp_pwd_command = 'PWD' + break_line
-    ftp_socket.send(ftp_pwd_command)
+def working_directory():
+    ftp_command = 'PWD' + break_line
+    ftp_socket.send(ftp_command)
     return ftp_socket.recv(max_line)
 
 
 # create connection
 def create_connection():
+    sys.stdout.write('Host:\n')
     sys.stdout.write('>>> ')
     server_address = sys.stdin.readline()
     ftp_new_socket = socket.create_connection((server_address, ftp_port), def_timeout)
@@ -45,7 +48,14 @@ def create_connection():
     sys.stdout.write(ftp_welcome)
     return ftp_new_socket
 
-# start of program
+
+# End the connection
+def quit_ftp_server():
+    ftp_command = 'QUIT' + break_line
+    ftp_socket.send(ftp_command)
+    return ftp_socket.recv(max_line)
+
+# Start of program
 try:
     ftp_socket = create_connection()
     ftp_reply = login_ftp()
@@ -53,7 +63,15 @@ try:
     while ftp_reply[0:3] == '530':
         ftp_reply = login_ftp()
 
-
+    sys.stdout.write('>>> ')
+    while True:
+        command_input = sys.stdin.readline()
+        if command_input == 'PWD':
+            ftp_reply = working_directory()
+        if command_input == 'QUIT':
+            ftp_reply = quit_ftp_server()
+            ftp_socket.close()
+            ftp_socket = create_connection()
 
 except:
-    sys.exit()
+    sys.exit(0)
