@@ -9,6 +9,7 @@ max_line = 8192
 ftp_reply = ""
 ftp_socket = None
 
+
 # login to ftp server
 def login_ftp():
     sys.stdout.write('>>> ')
@@ -27,6 +28,14 @@ def login_ftp():
     sys.stdout.write(ftp_login_reply)
     return ftp_login_reply
 
+
+# Displays the current working directory
+def print_working_directory():
+    ftp_pwd_command = 'PWD' + break_line
+    ftp_socket.send(ftp_pwd_command)
+    return ftp_socket.recv(max_line)
+
+
 # create connection
 def create_connection():
     sys.stdout.write('>>> ')
@@ -43,6 +52,8 @@ try:
 
     while ftp_reply[0:3] == '530':
         ftp_reply = login_ftp()
+
+
 
 except:
     sys.exit()
