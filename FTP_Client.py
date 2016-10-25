@@ -96,12 +96,12 @@ def rename(command):
     ftp_socket.send(ftp_command)
     ftp_response = ftp_socket.recv(max_line)
     sys.stdout.write(ftp_response)
-    if ftp_response != '3':
+    if ftp_response[0] != '3':
         return
     else:
         sys.stdout.write('>>> ')
-        ftp_command = sys.stdin.readline()
-        ftp_command = ftp_command + break_line
+        command = sys.stdin.readline()
+        ftp_command = command + break_line
         ftp_socket.send(ftp_command)
         ftp_response = ftp_socket.recv(max_line)
         sys.stdout.write(ftp_response)
@@ -163,16 +163,14 @@ def enter_pasv():
 
     if error_flag != 'Error':
         sys.stdout.write('227 Entering Passive Mode')
-
-        import re
-        regex = re.compile(r'(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)')
-
+        address_info = parts.split(',')
+        port = int(address_info[3]) * 256 + int(address_info[4])
         host = ftp_socket.getpeername()[0]
-        port = int(parts[3])
         return host, port
     else:
         sys.stdout.write(ftp_response)
         return error_flag, 0
+
 
 # Enter extended passive mode
 def enter_epsv():
@@ -243,6 +241,13 @@ try:
                 ftp_reply = login_ftp()
         elif command_input == 'EPSV':
             ftp_data_host, ftp_data_port = enter_epsv()
+            if ftp_data_host == 'Error':
+                ftp_data_host = ''
+                passive_mode = False
+            else:
+                passive_mode = True
+        elif command_input == 'PASV':
+            ftp_data_host, ftp_data_port = enter_pasv()
             if ftp_data_host == 'Error':
                 ftp_data_host = ''
                 passive_mode = False
