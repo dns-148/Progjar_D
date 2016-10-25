@@ -13,6 +13,7 @@ ftp_family = ''
 passive_mode = False
 ftp_socket = None
 ftp_data_socket = None
+response_regex = None
 
 
 # login to ftp server
@@ -32,7 +33,10 @@ def login_ftp():
     ftp_message = 'PASS ' + ftp_input + break_line
     ftp_socket.send(ftp_message)
     ftp_login_reply = ftp_socket.recv(max_line)
-    sys.stdout.write(ftp_login_reply)
+    if ftp_login_reply[:3] == '230':
+        sys.stdout.write('230 Login successful.\n')
+    else:
+        sys.stdout.write(ftp_login_reply)
     return ftp_login_reply
 
 
@@ -124,6 +128,7 @@ def listing_directory(command):
     ftp_response = ftp_data_socket.recv(max_line)
     ftp_response = str(ftp_response).replace('\012\015', '\n')
     sys.stdout.write(ftp_response)
+    return
 
 
 # create connection
@@ -145,28 +150,21 @@ def enter_pasv():
     ftp_response = ftp_socket.recv(max_line)
     error_flag = ''
 
-    if ftp_response != '227':
+    if ftp_response[:3] != '227':
         error_flag = 'Error'
-    left = ftp_response.find('(')
-
-    if left < 0:
-        error_flag = 'Error'
-    right = ftp_response.find(')', left + 1)
-
-    if right < 0:
-        error_flag = 'Error'
-
-    if ftp_response[left + 1] != ftp_response[right - 1]:
-        error_flag = 'Error'
-
-    parts = ftp_response[left + 1:right].split(ftp_response[left + 1])
 
     if error_flag != 'Error':
-        sys.stdout.write('227 Entering Passive Mode')
-        address_info = parts.split(',')
-        port = int(address_info[3]) * 256 + int(address_info[4])
+        sys.stdout.write('227 Entering Passive Mode\n')
+        global response_regex
+        if response_regex is None:
+            import re
+            response_regex = re.compile(r'(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)')
+        result = response_regex.search(ftp_response)
+        add_group = result.groups()
+        port = (int(add_group[4]) << 8) + int(add_group[5])
         host = ftp_socket.getpeername()[0]
         return host, port
+
     else:
         sys.stdout.write(ftp_response)
         return error_flag, 0
@@ -199,7 +197,7 @@ def enter_epsv():
         error_flag = 'Error'
 
     if error_flag != 'Error':
-        sys.stdout.write('229 Entering Extended Passive Mode')
+        sys.stdout.write('229 Entering Extended Passive Mode\n')
         host = ftp_socket.getpeername()[0]
         port = int(parts[3])
         return host, port
@@ -212,7 +210,9 @@ def enter_epsv():
 def quit_ftp_server():
     ftp_command = 'QUIT' + break_line
     ftp_socket.send(ftp_command)
-    return ftp_socket.recv(max_line)
+    ftp_response = ftp_socket.recv(max_line)
+    sys.stdout.write(ftp_response)
+    return
 
 
 # Start of program
@@ -223,15 +223,19 @@ try:
     while ftp_reply[0:3] == '530':
         ftp_reply = login_ftp()
 
+    working_directory()
     while True:
         sys.stdout.write('>>> ')
         command_input = sys.stdin.readline()
+        command_input = command_input.strip('\n')
+
         if command_input == 'PWD':
             working_directory()
         elif command_input == 'QUIT':
-            ftp_reply = quit_ftp_server()
-            ftp_data_socket.close()
-            ftp_data_socket = None
+            quit_ftp_server()
+            if ftp_data_socket is not None:
+                ftp_data_socket.close()
+                ftp_data_socket = None
             ftp_socket.close()
             ftp_family, ftp_socket = create_connection()
             if ftp_socket == 'exit':
