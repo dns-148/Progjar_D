@@ -1,5 +1,4 @@
 import socket
-# import sys
 from bs4 import BeautifulSoup
 
 max_size = 8192
@@ -17,7 +16,7 @@ while True:
     if "</html>" in resp_parts:
         break
 
-html_resp = response.partition("<!DOCTYPE html>")[1] + response.partition("<!DOCTYPE html>")[2]
+html_resp = response.split("\r\n\r\n", 1)[1]
 soup = BeautifulSoup(response, "html.parser")
 for node in soup.find_all("div", class_="subject"):
     print node.text
