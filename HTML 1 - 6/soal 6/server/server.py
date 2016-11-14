@@ -46,7 +46,9 @@ def listening():
                     c.start()
                     threads.append(c)
                 elif i == sys.stdin:
-                    if sys.stdin.readline() == "exit":
+                    temp = sys.stdin.readline()
+                    length = len(temp)
+                    if  temp[:length-1] == "exit":
                         break
                 time.sleep(100)
 

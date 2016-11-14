@@ -26,7 +26,8 @@ def html_request():
     response = client_socket.recv(max_line)
     e_point = response.find("\r\n\r\n")
     header = str(response[:e_point])
-    if "text/html" not in header:
+
+    if "text/html" not in header or "404 Not Found" not in header:
         flag = True
     s_point = header.find("Content-Length: ")
     e_point = header.find("\r\n", s_point)
@@ -69,8 +70,7 @@ def save_file(data):
 
 
 def handle_response(header, data):
-    # s_response = str(response)
-    if "text/html" in header:
+    if "text/html" in header or "404 Not Found" in header:
         format_html(data)
     elif "directory" in header:
         pass
@@ -124,4 +124,7 @@ try:
 except KeyboardInterrupt:
     sys.exit(0)
 except socket_error:
-    client_socket = connect()
+    print "[Errno 111] Connection refused"
+    print "Exit program"
+    sys.exit(0)
+    # client_socket = connect()

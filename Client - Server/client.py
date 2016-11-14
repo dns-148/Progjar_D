@@ -2,7 +2,7 @@ import socket
 import sys
 import math
 
-server_address = ('127.0.0.1', 5400)
+server_address = ('10.181.1.235', 5400)
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client_socket.connect(server_address)
 
