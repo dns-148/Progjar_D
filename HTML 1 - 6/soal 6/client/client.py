@@ -1,3 +1,5 @@
+# Client fitted for the HTML Server in server folder
+
 import sys
 import socket
 import os

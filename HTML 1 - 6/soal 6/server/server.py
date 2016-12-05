@@ -3,7 +3,6 @@ import socket
 import os
 import select
 import threading
-# import time
 from socket import error as socket_error
 
 audio = "mp3"
