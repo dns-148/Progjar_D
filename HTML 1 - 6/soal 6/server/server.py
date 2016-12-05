@@ -3,7 +3,7 @@ import socket
 import os
 import select
 import threading
-import time
+# import time
 from socket import error as socket_error
 
 audio = "mp3"
@@ -22,6 +22,7 @@ address = server_conf.splitlines()[1].split("server_address=", 1)[1]
 length = len(address)
 address = str(address[:length-1])
 server_address = (address, port)
+outer_address = ""
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -46,15 +47,13 @@ def listening():
                     c.start()
                     threads.append(c)
                 elif i == sys.stdin:
-                    temp = sys.stdin.readline()
-                    length = len(temp)
-                    if  temp[:length-1] == "exit":
+                    junk = sys.stdin.readline()
+                    if 'exit' in junk:
                         break
-                time.sleep(100)
 
         server_socket.close()
-        for t in threads:
-            t.join()
+        for c in threads:
+            c.stop()
 
     except KeyboardInterrupt:
         run_event.clear()
@@ -68,7 +67,7 @@ def html_response(conn_socket, path):
     op_file = open(path, "r")
     data = op_file.read()
     op_file.close()
-    cont_type = "Content-Type: text/html; charset=UTF-8\r\n"
+    cont_type = "Content-Type: text/html;charset=UTF-8\r\n"
 
     if "404" not in path:
         resp_header = "HTTP/1.1 302 Found\r\n" + cont_type + "Content-Length: " + file_size + "\r\n"
@@ -77,28 +76,55 @@ def html_response(conn_socket, path):
 
     response = resp_header + str(data)
     conn_socket.sendall(response)
-
     return
 
 
+def send_error(error_code, conn_socket):
+    if error_code == 403:
+        warning = '<!DOCTYPE HTML>\n<html>\n<head>\t\n<title>FaD 1.x.8</title>'
+        warning += '<body>\n\t<h1>403 Forbidden</h1>\n\t<p>You don'+"'"+'t have any permission to access.</p>'
+        warning += '\n\t<p><hr></p>\n\t<address>FaD 1.x.8 Server at ' + outer_address + '</address>\n</body>\n</html>'
+        file_size = len(warning)
+        resp_header = "HTTP/1.1 403 Forbidden\r\n" + "Content-Length: " + str(file_size) + "\r\n\r\n"
+        response = resp_header + warning
+        conn_socket.sendall(response)
+        return
+
+
 def directory_response(conn_socket):
-    cont_type = "Content-Type: application/x-directory; charset=binary\r\n"
-    resp_header = "HTTP/1.1 302 Found\r\n" + cont_type + "\r\n"
-    response = resp_header + "300: dataset/\n200: filename content-length file-type\n"
+    global outer_address
+    global port
+    html_op = '<!DOCTYPE HTML>\n<html>\n'
+    head_tag = '<head>\t\n<title>Index of /dataset </title>'
+    body_op = '<body>\n\t<h1>Index of /dataset</h1>'
+    t_op_tag = '\n\t<table>\n\t\t<tbody>'
+    t_head_tag = '\n\t\t\t<tr>\n\t\t\t\t<th align="center">Name</th>\n\t\t\t\t<th align="center">Size</th></tr>'
+    hr_line = '\n\t\t\t<tr><th colspan="2">\n\t\t\t\t<hr></th></tr>'
+    table_cont = ''
+    t_ed_tag = '\n\t\t</tbody>\n\t</table>'
+    html_e = '\n\t<address>FaD 1.x.8 Server at ' + outer_address + '</address>\n</body>\n</html>'
     b_path = "./dataset"
     list_dir = os.listdir(b_path)
+
     for i in list_dir:
         path = b_path + "/" + str(i)
-        temp = str(i).replace(" ", "%20")
         if os.path.isdir(path):
-            response = response + "201: " + temp + " 0 DIRECTORY\n"
+            f_name = '\n\t\t\t<tr>\n\t\t\t\t<td><a href="' + str(i) + '">' + str(i) + '</td>'
+            f_size = '\n\t\t\t\t<td align="right">  - </td>\n\t\t\t</tr>'
+            table_cont += f_name + f_size
         else:
             file_info = os.stat(path)
             file_size = str(file_info.st_size)
-            response = response + "201: " + temp + " " + file_size + " FILE\n"
-
+            f_name = '\n\t\t\t<tr>\n\t\t\t\t<td><a href="' + str(i) + '" download="">' + str(i) + '</td>'
+            f_size = '\n\t\t\t\t<td align="right"> ' + file_size + ' K </td>\n\t\t\t</tr>'
+            table_cont += f_name + f_size
+    f_html = html_op + head_tag + body_op + t_op_tag + t_head_tag + hr_line + table_cont + hr_line + t_ed_tag + html_e
+    html_length = len(f_html)
+    cont_type = "Content-Type: text/html;charset=UTF-8\r\n"
+    cont_length = "Content-Length: " + str(html_length) + "\r\n"
+    resp_header = "HTTP/1.1 200 OK\r\n" + cont_type + cont_length + "\r\n"
+    response = resp_header + f_html
     conn_socket.sendall(response)
-    print str(response)
     return
 
 
@@ -132,10 +158,20 @@ class Client(threading.Thread):
         self.client = client
         self.address = c_address
         self.size = max_size
+        self._stop = threading.Event()
+        self.running = True
+
+    def stop(self):
+        self._stop.set()
+        self.running = False
+
+    def stopped(self):
+        return self._stop.isSet()
 
     def run(self):
+        global outer_address
         try:
-            while True:
+            while self.running:
                 request = self.client.recv(max_size)
                 if request:
                     request = str(request)
@@ -146,26 +182,30 @@ class Client(threading.Thread):
                     f_path = path[1:end_point]
                     f_path = f_path.replace("%20", " ")
                     status = os.path.isfile(f_path)
+                    s_point = request.find("Host: ")
+                    end_point = request.find("\r\n", s_point)
+                    outer_address = request[s_point+6:end_point]
 
-                    if "/" == path or "" == f_path:
+                    if "/" == path or "" == f_path or "index" in f_path:
                         html_response(self.client, "index.html")
                     elif "/dataset/" == path or "/dataset" == path:
                         directory_response(self.client)
                     elif status:
-                        if "html" in path:
+                        if "html" in path and 'dataset' in f_path:
                             html_response(self.client, f_path)
-                        else:
+                        elif 'dataset' in f_path:
                             download_response(self.client, f_path)
+                        else:
+                            send_error(403, self.client)
                     else:
                         html_response(self.client, "404.html")
                 else:
                     self.client.close()
-                    break
-
-                # time.sleep(100)
+                    self.running = False
 
         except socket_error:
             self.client.close()
+            self.running = False
 
 
 # Start Program
